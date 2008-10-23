@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+
+$scenario = nil
+
+# both ranges are inclusive
+def random( min, max )
+	rand(max - min + 1) + min
+end
+
+def run_code( filename )
+  file = File.new( filename, 'r' )
+  buffer = file.read
+  file.close
+  eval( buffer )
+end
+
+
+
+run_code( "scenario.conf" )
+if $scenario == nil
+	puts "Your configuraion file did not specify a valid scenario, exiting"
+	exit 1
+end
+
+puts "members #{$scenario["Group 1"]["Members"]}"
