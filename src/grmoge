@@ -1,0 +1,138 @@
+#!/usr/bin/env ruby
+#
+# == Synopsis 
+#   This programm generates a group mobility model
+#   specified through the as argument specification
+#
+# == Examples
+#   This command print out some simple statistics
+#     grmoge scenario.conf
+#
+# == Usage 
+#   grmoge [options] <scenario-files>
+#
+#   For help use: grmoge -h
+#
+# == Options
+#   -h, --help          Displays help message
+#   -v, --verbose       Verbose output
+#   -V, --version       Display the version, then exit
+#   -q, --quiet         Output as little as possible, overrides verbose
+#   -f, --format        Specify the output format (ns2)
+#
+# == Author
+#   Hagen Paul Pfeifer <hagen@jauu.net>
+#
+# == Copyright
+#   Copyright (c) 2008 Hagen Paul Pfeifer
+
+
+require 'optparse' 
+require 'rdoc/usage'
+require 'ostruct'
+require 'date'
+
+@options
+@scenario_file
+
+$scenario = nil
+
+# both ranges are inclusive
+def random( min, max )
+	rand(max - min + 1) + min
+end
+
+def eval_scenario_file( filename )
+  file = File.new( filename, 'r' )
+  buffer = "$scenario = {\n"
+  buffer += file.read
+  buffer += "\n}"
+  file.close
+  eval( buffer )
+  if $scenario == nil
+    puts "Your configuraion file did not specify a valid scenario, exiting"
+    exit 1
+  end
+  puts "members #{$scenario["Group 1"]["Members"]}"
+end
+
+
+
+def init(arguments, stdin)
+  @arguments = arguments
+  @stdin = stdin
+
+  # Set defaults
+  @options = OpenStruct.new
+  @options.verbose = false
+  @options.quiet = false
+end
+
+# Parse options, check arguments, then process the command
+def run
+
+  if parsed_options? && arguments_valid? 
+
+    process_arguments            
+    process_command
+
+  else
+    output_usage
+  end
+
+end
+
+def parsed_options?
+
+  # Specify options
+  opts = OptionParser.new 
+  opts.on('-V',        '--version')    { output_version ; exit 0 }
+  opts.on('-h',        '--help')       { output_help }
+  opts.on('-v',        '--verbose')    { @options.verbose = true }  
+  opts.on('-q',        '--quiet')      { @options.quiet = true }
+  opts.on('-f [format]', '--format')   { |format| @options.format = format}
+
+  opts.parse!(@arguments) rescue return false
+
+  process_options
+  true      
+end
+
+def process_options
+  @options.verbose = false if @options.quiet
+end
+
+def arguments_valid?
+  true if @arguments.length == 1 
+end
+
+# Setup the arguments
+def process_arguments
+  @scenario_file = @arguments[0]
+end
+
+def output_help
+  output_version
+  RDoc::usage()
+end
+
+def output_usage
+  RDoc::usage('usage')
+end
+
+def output_version
+  $stderr.puts "#{File.basename(__FILE__)} version"
+end
+
+def process_command
+
+  $stderr.puts "grmoge - Copyright (c) 2008 Hagen Paul Pfeifer" if @options.verbose
+  $stderr.puts "parse scenario file: #{@scenario_file}" if @options.verbose
+
+  eval_scenario_file( @scenario_file )
+
+end
+
+
+init(ARGV, STDIN)
+run
