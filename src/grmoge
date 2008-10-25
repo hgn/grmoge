@@ -3,10 +3,11 @@
 # == Synopsis 
 #   This programm generates a group mobility model
 #   specified through the as argument specification
+#   bla blub
 #
 # == Examples
 #   This command print out some simple statistics
-#     grmoge scenario.conf
+#   grmoge scenario.conf
 #
 # == Usage 
 #   grmoge [options] <scenario-files>
@@ -19,7 +20,7 @@
 #   -V, --version       Display the version, then exit
 #   -q, --quiet         Output as little as possible, overrides verbose
 #   -f, --format        Specify the output format (ns2)
-#   -p, --plot          Plot terrain map
+#   -p, --plotterrain   Plot terrain map
 #
 # == Author
 #   Hagen Paul Pfeifer <hagen@jauu.net>
@@ -33,10 +34,21 @@
 $max_area_division = 100
 
 
+# only for developing process relevant
+$run_unit_tests = false
+
+
 
 class TerrainMap
 
+	attr_accessor :terrain_map
+	attr_accessor :field_edge_length
+	attr_accessor :fields_x, :fields_y
 	attr_accessor :x, :y, :options
+
+	public
+
+
 
 	def initialize( x, y, options )
 
@@ -44,81 +56,26 @@ class TerrainMap
 		@y = y
 		@options = options
 
-		area_size = determine_coordinate_area_size( x, y)
-		$stderr.puts "coordinates x: #{area_size[0]} y: #{area_size[1]}" if @options.verbose
-		map = generate_terrain_map( area_size )
-		plot_terrain_map( map ) if @options.plotterrain
+		determine_coordinate_area_size( x, y )
+		generate_terrain_map
 
 	end
 
-	# both ranges are inclusive
-	def random( min, max )
-		rand(max - min + 1) + min
+
+
+	# determine field for the given
+	# coordinate (x,y) and return the
+	# corresponding penalty
+	def score_for_coordinate( x, y )
+		
+		search_x = (x / @field_edge_length).to_i
+		search_y = (y / @field_edge_length).to_i
+
+		return @terrain_map[search_x][search_y]
 	end
 
 
-	def generate_terrain_map( area_size )
-
-		ret = Array.new
-
-		# generate random height points
-		area_size[0].times do |x|
-			ret[x] = Array.new
-			area_size[1].times do |y|
-				ret[x][y] = random(0, 10)
-			end
-		end
-
-
-		for n in (0..1)
-			for x in (0..area_size[0] - 1)
-				for y in (0..area_size[1] - 1)
-					for a in [-1, 0, 1]
-						for b in [-1, 0, 1]
-							if (x + a >= 0 && x + a < area_size[0] &&
-									y + b >= 0 && y + b < area_size[1])
-								ret[x][y] += ret[x+a][y+b]
-							end
-						end
-					end
-					ret[x][y] *= 0.075
-				end
-			end
-		end
-
-		return ret
-
-	end
-
-	def determine_coordinate_area_size( x, y)
-
-		if x > y
-			longest_edge  = x
-			shortest_edge = y
-			x_is_larger   = true
-		else
-			longest_edge  = y
-			shortest_edge = x
-			x_is_larger   = false
-		end
-
-
-		puts "x #{shortest_edge.to_f} y #{y}"
-
-		ratio = (shortest_edge.to_f / longest_edge) * $max_area_division
-
-
-		if x_is_larger == true
-			return [ $max_area_division, ratio.ceil ]
-		else
-			return [ ratio.ceil , $max_area_division ]
-		end
-	end
-
-
-
-
-	def plot_terrain_map( map )
+	def plot_terrain_map
 
 		require 'tmpdir'
 
@@ -130,7 +87,7 @@ class TerrainMap
 		# write data file
 		fh = open("terrain.data", "w");
 		i = j = 1
-		map.each do |x|
+		@terrain_map.each do |x|
 			x.each do |y|
 				fh.puts "#{i} #{j} #{y} "
 				j += 1
@@ -169,7 +126,92 @@ class TerrainMap
 
 	end
 
+
+
+	def unit_test
+		100000.times do
+			x_test = random( 0, @x )
+			y_test = random( 0, @y )
+			puts "terrain score test for x #{x_test} y #{y_test}"
+			score_for_coordinate( x_test, y_test )
+		end
+	end
+
+
+
+	private
+
+
+
+	# both ranges are inclusive
+	def random( min, max )
+		rand(max - min + 1) + min
+	end
+
+
+
+	def generate_terrain_map
+
+		@terrain_map = Array.new
+
+		# generate random height points
+		@fields_x.times do |x|
+			@terrain_map[x] = Array.new
+			@fields_y.times do |y|
+				@terrain_map[x][y] = random(0, 10)
+			end
+		end
+
+
+		for n in (0..1)
+			for x in (0..@fields_x - 1)
+				for y in (0..@fields_y - 1)
+					for a in [-1, 0, 1]
+						for b in [-1, 0, 1]
+							if (x + a >= 0 && x + a < @fields_x &&
+									y + b >= 0 && y + b < @fields_y)
+								@terrain_map[x][y] += @terrain_map[x+a][y+b]
+							end
+						end
+					end
+					@terrain_map[x][y] *= 0.075
+				end
+			end
+		end
+
+	end
+
+
+
+	def determine_coordinate_area_size( x, y)
+
+		if x > y
+			longest_edge  = x
+			shortest_edge = y
+			x_is_larger   = true
+		else
+			longest_edge  = y
+			shortest_edge = x
+			x_is_larger   = false
+		end
+
+		ratio = (shortest_edge.to_f / longest_edge) * $max_area_division
+
+		@field_edge_length = longest_edge / $max_area_division
+
+		if x_is_larger == true
+			@fields_x = $max_area_division + 1
+			@fields_y = ratio.ceil
+		else
+			@fields_x = ratio.ceil
+			@fields_y = $max_area_division + 1
+		end
+	end
+
+
+
 end # class Terrain Map
+
 
 
 class GrMoGe
@@ -179,17 +221,21 @@ class GrMoGe
 	require 'ostruct'
 	require 'date'
 
-	attr_accessor :options, :scenario_file
 
+	attr_accessor :options, :scenario_file
 	$scenario = nil
+
 
 	def deg2rad( d )
 		( d / 180.0 ) * Math::PI
 	end
 
+
+
 	def rad2deg( r )
 		( r / Math::PI ) * 180
 	end
+
 
 
 	def validate_scenario
@@ -200,7 +246,7 @@ class GrMoGe
 		end
 
 		if $scenario["Map"]["Size"][0] <= 0 or
-			$scenario["Map"]["Size"][1] <= 0
+			 $scenario["Map"]["Size"][1] <= 0
 			puts "Your specified map size is to small!"
 			exit( 1 )
 		end
@@ -208,22 +254,32 @@ class GrMoGe
 		true
 	end
 
+
+
 	# both ranges are inclusive
 	def random( min, max )
 		rand(max - min + 1) + min
 	end
 
 	def eval_scenario_file( filename )
+
+		$stderr.puts "# parse scenario file: #{@scenario_file}" if @options.verbose
+
 		file = File.new( filename, 'r' )
+
 		buffer = "$scenario = {\n"
 		buffer += file.read
 		buffer += "\n}"
+
 		file.close
+
 		eval( buffer )
+
 		if $scenario == nil
 			puts "Your configuraion file did not specify a valid scenario, exiting"
 			exit 1
 		end
+
 	end
 
 
@@ -240,6 +296,8 @@ class GrMoGe
 
 	end
 
+
+
 	# Parse options, check arguments, then process the command
 	def parse_arguments
 
@@ -253,16 +311,18 @@ class GrMoGe
 
 	end
 
+
+
 	def parsed_options?
 
 		# Specify options
 		opts = OptionParser.new 
-		opts.on('-V',        '--version')    { output_version ; exit 0 }
-		opts.on('-h',        '--help')       { output_help }
-		opts.on('-v',        '--verbose')    { @options.verbose = true }  
-		opts.on('-q',        '--quiet')      { @options.quiet = true }
-		opts.on('-p',        '--plot')       { @options.plotterrain = true }
-		opts.on('-f [format]', '--format')   { |format| @options.format = format}
+		opts.on('-V',        '--version')     { output_version ; exit 0 }
+		opts.on('-h',        '--help')        { output_help }
+		opts.on('-v',        '--verbose')     { @options.verbose = true }  
+		opts.on('-q',        '--quiet')       { @options.quiet = true }
+		opts.on('-p',        '--plotterrain') { @options.plotterrain = true }
+		opts.on('-f [format]', '--format')    { |format| @options.format = format}
 
 		opts.parse!(@arguments) rescue return false
 
@@ -270,36 +330,49 @@ class GrMoGe
 		true      
 	end
 
+
+
 	def process_options
 		@options.verbose = false if @options.quiet
 	end
 
+
+
 	def arguments_valid?
 		true if @arguments.length == 1 
 	end
+
+
 
 	# Setup the arguments
 	def process_arguments
 		@scenario_file = @arguments[0]
 	end
 
+
+
 	def output_help
 		output_version
 		RDoc::usage()
 	end
 
+
+
 	def output_usage
 		RDoc::usage('usage')
 	end
+
+
 
 	def output_version
 		$stderr.puts "#{File.basename(__FILE__)} version"
 	end
 
+
+
 	def run
 
-		$stderr.puts "grmoge - Copyright (c) 2008 Hagen Paul Pfeifer" if @options.verbose
-		$stderr.puts "parse scenario file: #{@scenario_file}" if @options.verbose
+		$stderr.puts "grmoge - Copyright (c) 2008 Hagen Paul Pfeifer"
 
 		# init
 		eval_scenario_file( @scenario_file )
@@ -308,21 +381,32 @@ class GrMoGe
 		#generate map
 		map = TerrainMap.new( $scenario["Map"]["Size"][0],
 									        $scenario["Map"]["Size"][1], @options )
+		if $run_unit_tests
+			map.unit_test
+		end
+
+		# plot map if user request it
+		map.plot_terrain_map if @options.plotterrain
+
 
 		groups = parse_groups( $scenario )
 
 	end
 
+
+
 	private
 
+
+
 	def parse_groups( scenario )
-
 		$stderr.puts "# parse groups" if @options.verbose
-
 	end
 
 
+
 end
+
 
 
 grmoge = GrMoGe.new(ARGV, STDIN)
