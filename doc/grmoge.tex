@@ -35,7 +35,7 @@
 \begin{document}
 \newcommand{\ra}[1]{\renewcommand{\arraystretch}{#1}}
 
-\title{A Group Mobility Model Generator for MANETs based on Terrain Maps}
+\title{A Group Mobility Model Generator for MANETs Using Terrain Maps}
 
 \author{Hagen~Paul~Pfeifer\\Furtwangen University\\Faculty of Business
 Information Systems\\hagen.pfeifer@hs-furtwangen.de}
@@ -64,8 +64,54 @@ Genetic algorithms, Software performance, Functional analysis
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 
+
+\includegraphics[width=.7\linewidth]{figures/macro-mobility.pdf}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Functioning}
+
+
+%%%%%%%%%%%
+\subsection{Mode of operation}
+
+\begin{algorithm}[H]
+  \SetLine
+  parse scenario file\;
+	generate random terrain map\;
+  \While{each defined group leader}{
+		determine group leader route
+	}
+  \caption{How to write algorithms}
+\end{algorithm}
+
+\begin{algorithm}[H]
+  \SetLine
+  \KwData{this text}
+  \KwResult{how to write algorithm with \LaTeX2e }
+  initialization\;
+  \While{not at end of this document}{
+    read current\;
+    \eIf{understand}{
+      go to next section\;
+      current section becomes this one\;
+      }{
+      go back to the beginning of current section\;
+      }
+    }
+  \caption{How to write algorithms}
+\end{algorithm}
+
+%%%%%%%%%%%
+\subsection{Terrain Penalty Map}
+
+\begin{figure}
+    \centering
+    \subfigure[50000m]{\includegraphics[width=0.24\textwidth]{figures/penalty-map-3d.pdf}}
+    \subfigure[25000m]{\includegraphics[width=0.24\textwidth]{figures/penalty-map-3d-flat.pdf}}\\
+     %
+    \caption{Terrain Penalty Map}%
+    \label{fig:terrain-penalty-map}
+\end{figure}
 
 %%%%%%%%%%%
 \subsection{Group Leader}
