@@ -38,6 +38,60 @@ $max_area_division = 100
 $run_unit_tests = false
 
 
+class Group
+
+	attr_accessor :name, :waypoints
+
+	public
+
+
+	def initialize( group, terrain_map )
+
+		@name      = group["Name"] ? group["Name"] : "nameless"
+		@waypoints = group["Waypoints"]
+
+		if group["VelocityMode"]
+			if (group["VelocityMode"].casecmp( "uniform" ))
+				@velocity_mode = :uniform
+			elsif (group["VelocityMode"].casecmp( "variable" ))
+				@velocity_mode = :variable
+			else
+				GrMoGe.err "not a valid velocity mode: #{group["VelocityMode"]}"
+			end
+
+		else
+			@velocity_mode = :uniform
+		end
+
+		sanity_check( terrain_map )
+
+	end
+
+	private
+
+	def sanity_check( terrain_map )
+
+		if @waypoints.size < 2
+			GrMoGe.err "At least two waypoints must be specified"
+		end
+
+		# check if the given waypoints are within the
+		# terrain map
+		@waypoints.each do |wa|
+			x = wa[1][0]
+			y = wa[1][1]
+			if terrain_map.points_within_map( x, y) == false
+				GrMoGe.err "Waypoint x #{x} y #{y} not valid (outside the map)"
+			end
+
+		end
+
+	end
+
+
+end # Group
+
+
 
 class TerrainMap
 
@@ -72,6 +126,14 @@ class TerrainMap
 		search_y = (y / @field_edge_length).to_i
 
 		return @terrain_map[search_x][search_y]
+	end
+
+	def points_within_map( x, y)
+		if x < 0 or y < 0 or x > @x or y > @y
+			return false
+		else
+			return true
+		end
 	end
 
 
@@ -225,6 +287,8 @@ class GrMoGe
 	attr_accessor :options, :scenario_file
 	$scenario = nil
 
+
+	public
 
 	def deg2rad( d )
 		( d / 180.0 ) * Math::PI
@@ -389,8 +453,13 @@ class GrMoGe
 		map.plot_terrain_map if @options.plotterrain
 
 
-		groups = parse_groups( $scenario )
+		groups = parse_groups( $scenario, map )
 
+	end
+
+	def GrMoGe.err( text )
+		$stderr.puts("ERROR: #{text}")
+		exit( 1 )
 	end
 
 
@@ -398,14 +467,23 @@ class GrMoGe
 	private
 
 
+	def parse_groups( scenario, map )
 
-	def parse_groups( scenario )
+		groups = Array.new
+
 		$stderr.puts "# parse groups" if @options.verbose
+		scenario["Groups"].each do |group|
+			groups << Group.new(group, map)
+		end
+
+		$stderr.puts "# found #{groups.size} groups" if @options.verbose
+
 	end
 
 
 
 end
+
 
 
 
