@@ -46,7 +46,7 @@ $max_meter_diff = 2000
 # 500 meter a unit is in the ability to
 # reach the final waypoint directly (without
 # detours)
-$track_min_snap_threshold = 500
+$track_min_snap_threshold = 2000
 
 
 # only for developing process relevant
@@ -113,7 +113,7 @@ class Group
 		# loop 1000 times to find the ideal track
 		# after this we assume that this is the
 		# best track[tm]
-		10.times do |iteration|
+		100.times do |iteration|
 
 			new_track_proposal = propose_ideal_track( map )
 			new_cost_of_track = calculate_track_costs( new_track_proposal, map )
@@ -341,24 +341,25 @@ class Group
 			return subtracks
 		end
 
+		subtrack_angle = calc_subtrack_angle(start_coordinate, end_coordinate)
+		current_subwaypoint = start_coordinate
+
 		# ok, we must split the way at least on time
 		# so we enter a little loop ...
 		# This loop must be resisdent against reentrant, because
 		# of the redo statements in the next couple of lines
+		i = 0
 		while true
-
-			subtrack_angle = calc_subtrack_angle(start_coordinate, end_coordinate)
-
 
 			next_minor_waypoint_distance = GrMoGe.random( 20, length)
 
 			subtrack_divider = calc_subtrack_divider(
-				start_coordinate,
+				current_subwaypoint,
 				end_coordinate,
 				subtrack_angle,
 				next_minor_waypoint_distance)
 
-			system("echo #{subtrack_divider[0]} #{subtrack_divider[1]} >> /tmp/plot/data")
+			#system("echo #{subtrack_divider[0]} #{subtrack_divider[1]} >> /tmp/plot/data")
 
 			# depending on the previous divider we
 			# calculate the new _real subtrack (90 degree)
@@ -373,16 +374,20 @@ class Group
 			system("echo #{coordinate[0]} #{coordinate[1]} >> /tmp/plot/data")
 
 
-			# XXX: to make things not too
-			# complicated, return here
-			subtracks << coordinate
-			subtracks << end_coordinate
-			system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
-			return subtracks
+			# dropout condition
+			# remaining length to end reach lower threshold
+			length = track_distance(coordinate, end_coordinate)
+			if length <= $track_min_snap_threshold
+				subtracks << coordinate
+				subtracks << end_coordinate
+				system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
+				return subtracks
+			end
 
+			current_subwaypoint = subtrack_divider
 		end
 
-		return subtracks
+		return nil
 	end
 
 
@@ -536,11 +541,11 @@ class TerrainMap
 		gfh.puts "set size 4"
 		gfh.puts "set pm3d"
 		gfh.puts "splot \"terrain.data\" title \"Terrain Penalty Map\" with lines"
+		gfh.puts "!epstopdf --outfile=terrain.pdf terrain.eps"
 		gfh.close
 
 		# generate eps and convert to pdf instantly
 		system("gnuplot terrain.gpi")
-		system("epstopdf --outfile=terrain.pdf terrain.eps")
 		system("cp terrain.pdf #{curdir}")
 
 
