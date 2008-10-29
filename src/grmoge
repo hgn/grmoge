@@ -37,7 +37,7 @@ $max_area_division = 100
 # max variation in path calculation process
 # in procent
 $max_path_variation_percent = 10
-$max_meter_diff = 500
+$max_meter_diff = 2000
 
 
 # the next threshold defines a lower limit since
@@ -57,6 +57,8 @@ class Group
 
 	attr_accessor :name, :waypoints
 	attr_reader :waypoint_segments_angle
+
+	attr_accessor :track
 
 	public
 
@@ -85,6 +87,21 @@ class Group
 
 	end
 
+	def set_group_track( track )
+		@track = track
+	end
+
+
+	def verify_track( track )
+
+		# a track requires at least start and end coodinates,
+		# check this ...
+		if track.size < 2
+			GrMoGe.err("no real track - start or end missing")
+		end
+
+	end
+
 	# try to find the ideal track for the given start and
 	# endpoint (including all intermediate waypoints
 	def determine_ideal_track( map )
@@ -96,15 +113,17 @@ class Group
 		# loop 1000 times to find the ideal track
 		# after this we assume that this is the
 		# best track[tm]
-		1.times do |iteration|
+		10.times do |iteration|
 
-			new_track_proposal = propose_ideal_track
-			new_cost_of_track = calculate_track_costs( new_track_proposal )
+			new_track_proposal = propose_ideal_track( map )
+			new_cost_of_track = calculate_track_costs( new_track_proposal, map )
 
 			if (current_ideal_track == nil) # first time
 				current_ideal_costs = new_cost_of_track
 				current_ideal_track = new_track_proposal
 			end
+
+			puts "iteration #{iteration} costs #{new_cost_of_track}"
 
 			# replace the current track if
 			# we found a superior track (cheaper one)
@@ -133,13 +152,11 @@ class Group
 
 	# iterate over all points and
 	# accumulate the costs
-	def calculate_track_costs( track )
+	def calculate_track_costs( track, map )
 
 		accumulated_costs = 0
 
 		(track.size - 1).times do |track_section|
-
-			puts "costs: #{track[track_section][0]} #{track[track_section][0]}"
 
 			track_prev_x = track[track_section][0]
 			track_prev_y = track[track_section][1]
@@ -147,11 +164,27 @@ class Group
 			track_next_x = track[track_section + 1][0]
 			track_next_y = track[track_section + 1][1]
 
+			angle = diff_to_reference_angle(track[track_section],
+											track[track_section + 1])
+
+
+			diff_distance = track_distance(track[track_section],
+										   track[track_section + 1]).ceil
+
+			diff_distance.times do |distance|
+				coordinate = calc_subtrack_divider(track[track_section],
+												   track[track_section + 1],
+												   angle,
+												   distance)
+
+				accumulated_costs += map.score_for_coordinate(coordinate[0],
+															  coordinate[1])
+
+			end
 		end
 
 		# got it!
 		return accumulated_costs
-
 	end
 
 
@@ -225,7 +258,6 @@ class Group
 		b = end_coordinate
 
 		a_b_angle = diff_to_reference_angle(a, b)
-		$stderr.puts "a-b degree: #{a_b_angle.rad2deg}"
 
 		return a_b_angle
 	end
@@ -266,7 +298,6 @@ class Group
 
 			# left
 			l_rad = angle + 90.deg2rad
-			puts "angel #{angle} lrad: #{l_rad}"
 			ank = GrMoGe.random(0, $max_meter_diff)
 			geg = (ank * Math.sin(l_rad)).to_i
 			#          x,               y
@@ -296,7 +327,7 @@ class Group
 
 	# this method deals only with two
 	# coordiantes: start and end coordinates
-	def propose_ideal_subtracks(start_coordinate, end_coordinate)
+	def propose_ideal_subtracks(start_coordinate, end_coordinate, map)
 
 		subtracks = Array.new
 
@@ -312,6 +343,8 @@ class Group
 
 		# ok, we must split the way at least on time
 		# so we enter a little loop ...
+		# This loop must be resisdent against reentrant, because
+		# of the redo statements in the next couple of lines
 		while true
 
 			subtrack_angle = calc_subtrack_angle(start_coordinate, end_coordinate)
@@ -325,21 +358,27 @@ class Group
 				subtrack_angle,
 				next_minor_waypoint_distance)
 
-				system("echo #{subtrack_divider[0]} #{subtrack_divider[1]} >> /tmp/plot/data")
+			system("echo #{subtrack_divider[0]} #{subtrack_divider[1]} >> /tmp/plot/data")
 
-				# depending on the previous divider we
-				# calculate the new _real subtrack (90 degree)
-				# on the left or right side
-				coordinate = calc_real_sub_coordinate(subtrack_divider, subtrack_angle)
-				system("echo #{coordinate[0]} #{coordinate[1]} >> /tmp/plot/data")
+			# depending on the previous divider we
+			# calculate the new _real subtrack (90 degree)
+			# on the left or right side
+			coordinate = calc_real_sub_coordinate(subtrack_divider, subtrack_angle)
+
+			# a sanity check here
+			if map.coordinate_out_of_space(coordinate) == true
+				redo
+			end
+
+			system("echo #{coordinate[0]} #{coordinate[1]} >> /tmp/plot/data")
 
 
-				# XXX: to make things not too
-				# complicated, return here
-				subtracks << coordinate
-				subtracks << end_coordinate
-				system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
-				return subtracks
+			# XXX: to make things not too
+			# complicated, return here
+			subtracks << coordinate
+			subtracks << end_coordinate
+			system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
+			return subtracks
 
 		end
 
@@ -354,14 +393,14 @@ class Group
 	# Between these two points a called
 	# method (propose_ideal_subtrack) will
 	# do the dirty
-	def propose_ideal_track
+	def propose_ideal_track(map)
 
 		# [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
 		track = Array.new
 
 		(@waypoints.size - 1).times do |way_start|
-			system("echo #{@waypoints[way_start][1][0]} #{@waypoints[way_start][1][1]} > /tmp/plot/data")
-			tmp_track = propose_ideal_subtracks(@waypoints[way_start][1], @waypoints[way_start + 1][1])
+			system("echo #{@waypoints[way_start][1][0]} #{@waypoints[way_start][1][1]} >> /tmp/plot/data")
+			tmp_track = propose_ideal_subtracks(@waypoints[way_start][1], @waypoints[way_start + 1][1], map)
 			tmp_track.each do |coor| track << coor end
 		end
 
@@ -385,8 +424,6 @@ class Group
 
 			# pythagorean theorem
 			ab_dist = Math.sqrt((ac_dist ** 2).to_f + (bc_dist ** 2))
-
-			puts "degree: #{Math.asin(bc_dist.to_f / ab_dist).rad2deg} (rad: #{Math.asin(bc_dist.to_f / ab_dist)})"
 
 			@waypoints[waypoint] << Math.asin(bc_dist.to_f / ab_dist)
 			@waypoints[waypoint] << ab_dist
@@ -435,6 +472,17 @@ class TerrainMap
 		determine_coordinate_area_size( x, y )
 		generate_terrain_map
 
+	end
+
+	def coordinate_out_of_space(coordinate)
+		if coordinate[0] < 0  or
+		   coordinate[0] > @x or
+		   coordinate[1] < 0  or
+		   coordinate[1] > @y
+		   	return true
+		else
+			return false
+		end
 	end
 
 	# determine field for the given
@@ -727,7 +775,9 @@ class GrMoGe
 		# group handling
 		groups = parse_groups( $scenario, map )
 		groups.each do |group|
-			group.determine_ideal_track(map)
+			ideal_track = group.determine_ideal_track(map)
+			group.verify_track( ideal_track )
+			group.set_group_track(ideal_track)
 		end
 
 
