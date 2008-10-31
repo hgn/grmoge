@@ -21,6 +21,7 @@
 #   -q, --quiet         Output as little as possible, overrides verbose
 #   -f, --format        Specify the output format (ns2)
 #   -p, --plotterrain   Plot terrain map
+#   -d, --drawrouting
 #
 # == Author
 #   Hagen Paul Pfeifer <hagen@jauu.net>
@@ -37,7 +38,7 @@ $max_area_division = 100
 # max variation in path calculation process
 # in procent
 $max_path_variation_percent = 10
-$max_meter_diff = 2000
+$max_meter_diff = 1000
 
 
 # the next threshold defines a lower limit since
@@ -46,7 +47,11 @@ $max_meter_diff = 2000
 # 500 meter a unit is in the ability to
 # reach the final waypoint directly (without
 # detours)
-$track_min_snap_threshold = 2000
+$track_min_snap_threshold = 4000
+
+# how often should I iterate until I consider a calculated
+# route as "perfect"?
+$track_probes = 50
 
 
 # only for developing process relevant
@@ -63,6 +68,8 @@ class Group
 	public
 
 
+	#################################
+	#################################
 	def initialize( group, terrain_map )
 
 		@name      = group["Name"] ? group["Name"] : "nameless"
@@ -96,12 +103,13 @@ class Group
 
 		# a track requires at least start and end coodinates,
 		# check this ...
-		if track.size < 2
-			GrMoGe.err("no real track - start or end missing")
-		end
+		#if track.size < 2
+		#	GrMoGe.err("no real track - start or end missing")
+		#end
 
 	end
 
+	###################################################################
 	# try to find the ideal track for the given start and
 	# endpoint (including all intermediate waypoints
 	def determine_ideal_track( map )
@@ -113,7 +121,9 @@ class Group
 		# loop 1000 times to find the ideal track
 		# after this we assume that this is the
 		# best track[tm]
-		100.times do |iteration|
+		$track_probes.times do |iteration|
+
+			GrMoGe.stdout_swirl = "probe for ideal track: #{iteration}/#{$track_probes}"
 
 			new_track_proposal = propose_ideal_track( map )
 			new_cost_of_track = calculate_track_costs( new_track_proposal, map )
@@ -123,7 +133,7 @@ class Group
 				current_ideal_track = new_track_proposal
 			end
 
-			puts "iteration #{iteration} costs #{new_cost_of_track}"
+			#puts "iteration #{iteration} costs #{new_cost_of_track}"
 
 			# replace the current track if
 			# we found a superior track (cheaper one)
@@ -138,6 +148,30 @@ class Group
 		return current_ideal_track
 	end
 
+	def draw_route( opt )
+
+		cr           = opt[:cairo_context]
+		size         = opt[:size]
+		terrain_size = opt[:terrain_size]
+
+		x_scale = size[0].to_f / terrain_size[0]
+		y_scale = size[1].to_f / terrain_size[1]
+
+		(@track.size - 1).times do |i|
+			x_start = @track[i][0] * x_scale
+			y_start = @track[i][1] * y_scale
+			x_end   = @track[i + 1][0] * x_scale
+			y_end   = @track[i + 1][1] * y_scale
+
+			cr.set_source_color(:black)
+			cr.set_line_width(1.0)
+			cr.move_to(x_start, size[1] - y_start)
+			cr.line_to(x_end, size[1] - y_end)
+			cr.stroke
+
+
+		end
+	end
 
 	private
 
@@ -172,6 +206,7 @@ class Group
 										   track[track_section + 1]).ceil
 
 			diff_distance.times do |distance|
+
 				coordinate = calc_subtrack_divider(track[track_section],
 												   track[track_section + 1],
 												   angle,
@@ -222,8 +257,8 @@ class Group
 				coordinate_c[0] = coordinate_a[0]
 				coordinate_c[1] = coordinate_b[1]
 			else
-				GrMoGe.err
-			"Both coordinates are on one axis - thats not allowd!"
+				GrMoGe.err "Both coordinates are on one axis - thats not allowd: " +
+					"#{coordinate_a[1]} #{coordinate_b[1]}"
 			end
 
 		elsif coordinate_a[0] > coordinate_b[0]
@@ -235,12 +270,12 @@ class Group
 				coordinate_c[0] = coordinate_a[0]
 				coordinate_c[1] = coordinate_b[1]
 			else
-				GrMoGe.err
-			"Both coordinates are on one axis - thats not allowd!"
+				GrMoGe.err "Both coordinates are on one axis - thats not allowd: " +
+					"#{coordinate_a[1]} #{coordinate_b[1]}"
 			end
 		else
-			GrMoGe.err
-			"Both coordinates are on one axis - thats not allowd!"
+			GrMoGe.err "Both coordinates are on one axis - thats not allowd: " +
+					"#{coordinate_a[0]}:#{coordinate_a[1]} - #{coordinate_b[0]}:#{coordinate_b[1]}"
 		end
 
 		ab_dist = track_distance(coordinate_a, coordinate_b)
@@ -382,12 +417,33 @@ class Group
 				subtracks << end_coordinate
 				system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
 				return subtracks
+			else
+				subtracks << coordinate
 			end
 
 			current_subwaypoint = subtrack_divider
 		end
 
 		return nil
+	end
+
+	def print_coordinate_array( array )
+		if array.class != Array
+			puts "no array"
+		end
+		array.each do |coordinates|
+			if coordinates.class != Array
+				puts "no array"
+			end
+			if coordinates.size != 2
+				puts "coordinate array broken"
+			end
+			if coordinates[0].class != Fixnum or
+			   coordinates[1].class != Fixnum
+				puts "Coordinate broken"
+			end
+			puts "   #{coordinates[0]} #{coordinates[1]}"
+		end
 	end
 
 
@@ -402,6 +458,8 @@ class Group
 
 		# [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
 		track = Array.new
+
+		track = [@waypoints[0][1]]
 
 		(@waypoints.size - 1).times do |way_start|
 			system("echo #{@waypoints[way_start][1][0]} #{@waypoints[way_start][1][1]} >> /tmp/plot/data")
@@ -468,6 +526,8 @@ class TerrainMap
 
 	public
 
+	#################################
+	#################################
 	def initialize( x, y, options )
 
 		@x = x
@@ -506,6 +566,46 @@ class TerrainMap
 			return false
 		else
 			return true
+		end
+	end
+
+
+	def drawtopology( opt )
+
+		cr   = opt[:cairo_context]
+		size = opt[:size]
+
+		scale_x = size[0].to_f / @fields_x
+		scale_y = size[1].to_f / @fields_y
+
+		# grey colormap
+		colors = [
+			Cairo::Color::RGB.new(1.0, 1.0, 1.0),
+			Cairo::Color::RGB.new(0.9, 0.9, 0.9),
+			Cairo::Color::RGB.new(0.8, 0.8, 0.8),
+			Cairo::Color::RGB.new(0.7, 0.7, 0.7),
+			Cairo::Color::RGB.new(0.6, 0.6, 0.6),
+			Cairo::Color::RGB.new(0.5, 0.5, 0.5),
+			Cairo::Color::RGB.new(0.4, 0.4, 0.4),
+			Cairo::Color::RGB.new(0.3, 0.3, 0.3),
+			Cairo::Color::RGB.new(0.2, 0.2, 0.2),
+			Cairo::Color::RGB.new(0.1, 0.1, 0.1),
+			Cairo::Color::RGB.new(0.0, 0.0, 0.0),
+		]
+
+		@fields_y.times do |y|
+			@fields_x.times do |x|
+				score = @terrain_map[x][y]
+				color = colors[score.ceil]
+				cr.set_source_color( color )
+
+				rect_x = x * scale_x
+				rect_y = y * scale_y
+
+				cr.rectangle(rect_x.ceil,  (size[1] - rect_y - scale_y).ceil,
+							 scale_x.ceil, scale_y.ceil)
+				cr.fill
+			end
 		end
 	end
 
@@ -640,6 +740,8 @@ class GrMoGe
 	require 'ostruct'
 	require 'date'
 
+	@@current_swirl = 0
+
 	attr_accessor :options, :scenario_file
 	$scenario = nil
 
@@ -691,15 +793,18 @@ class GrMoGe
 
 	end
 
+	#################################
+	#################################
 	def initialize( arguments, stdin )
 		@arguments = arguments
 		@stdin = stdin
 
 		# Set defaults
 		@options = OpenStruct.new
-		@options.verbose = false
-		@options.quiet = false
+		@options.verbose     = false
+		@options.quiet       = false
 		@options.plotterrain = false
+		@options.drawrouting = false
 
 	end
 
@@ -725,6 +830,7 @@ class GrMoGe
 		opts.on('-v',        '--verbose')     { @options.verbose = true }  
 		opts.on('-q',        '--quiet')       { @options.quiet = true }
 		opts.on('-p',        '--plotterrain') { @options.plotterrain = true }
+		opts.on('-d',        '--drawrouting') { @options.drawrouting = true }
 		opts.on('-f [format]', '--format')    { |format| @options.format = format}
 
 		opts.parse!(@arguments) rescue return false
@@ -782,9 +888,59 @@ class GrMoGe
 		groups.each do |group|
 			ideal_track = group.determine_ideal_track(map)
 			group.verify_track( ideal_track )
-			group.set_group_track(ideal_track)
+			group.set_group_track( ideal_track )
 		end
 
+		drawrouting( groups, map ) if @options.drawrouting
+
+
+	end
+
+	###################################################################
+	def GrMoGe.stdout_swirl=(newtext)
+
+		swirl = Array.[]( '-', '/', '|', '\\')
+
+		text = sprintf("\r%s  %-10s", swirl[@@current_swirl], newtext)
+
+		$stdout.print text
+		@@current_swirl = (@@current_swirl + 1) % 3
+	end
+
+	###################################################################
+	def GrMoGe.stdout_swirl_exit
+
+		tmp = " "; 80.times { tmp << " " }
+		text = sprintf("\r* exiting%s\n", tmp)
+
+		$stdout.print text
+	end
+
+	def drawrouting( groups, map )
+
+		require 'cairo'
+		# XXX: add info aptitude install libcairo-ruby
+
+		image_size = [ 1000, 1000 ]
+		terrain_size = [ map.x, map.y ]
+
+		sc = Cairo.const_get("PDFSurface")
+		surface = sc.new("routing.pdf",  image_size[0], image_size[1])
+		cr = Cairo::Context.new(surface)
+		cr.set_source_color(:white)
+		cr.rectangle(0, 0, image_size[0], image_size[1]).fill
+
+		cr.set_line_width(1.0)
+
+		map.drawtopology(:cairo_context => cr, :size =>  image_size )
+		
+		groups.each do |group|
+			group.draw_route(:cairo_context => cr,
+							 :size =>  image_size,
+							 :terrain_size => terrain_size  )
+		end
+
+		return cr.show_page
 
 	end
 
