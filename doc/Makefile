@@ -21,7 +21,6 @@ ps:  $(OBJ_PS)
 dvi: $(OBJ_DVI)
 
 $(OBJ_DVI): $(OBJ_SRC) $(STYL)
-	make -f figures/Makefile all
 	latex $(OBJ_SRC)
 	bibtex $(OBJ_AUX) || true
 	latex $(OBJ_SRC)
@@ -31,7 +30,6 @@ $(OBJ_PS): $(OBJ_DVI)
 	dvips -o${OBJ_PS} $(OBJ_DVI)
 
 $(OBJ_PDF): $(OBJ_SRC) $(STYL)
-	make -f figures/Makefile all
 	pdflatex -shell-escape -file-line-error $(OBJ_SRC)
 	bibtex $(OBJ_AUX) || true
 	pdflatex -shell-escape -file-line-error $(OBJ_SRC)
@@ -45,7 +43,6 @@ spellcheck: $(OBJ_SRC)
 	aspell --mode=tex --ignore=3 --lang=$(LANG) -c chapter/*.tex
 
 clean:
-	make -f figures/Makefile clean
 	rm -f *.aux *.idx *.log *.out *.toc *.bbl *.blg \
 		  *.dvi *.ps *.lot *.pdf *.tmp *.bak *~
 

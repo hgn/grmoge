@@ -2,8 +2,8 @@
 SVG_FILES = $(wildcard *.svg)
 PDF_FILES = $(patsubst %.svg,%.pdf,  $(SVG_FILES))
 
-all: $(PDF_FILES)
 
+all: $(PDF_FILES)
 
 %.pdf: %.svg 
 	@ echo "convert "$<
@@ -11,4 +11,5 @@ all: $(PDF_FILES)
 					--export-pdf=$*.pdf $*.svg
 
 clean:
-	@true
+	rm -rf $(PDF_FILES)
+

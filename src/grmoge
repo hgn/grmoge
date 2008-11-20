@@ -406,7 +406,7 @@ class Group
 				redo
 			end
 
-			system("echo #{coordinate[0]} #{coordinate[1]} >> /tmp/plot/data")
+			#system("echo #{coordinate[0]} #{coordinate[1]} >> /tmp/plot/data")
 
 
 			# dropout condition
@@ -415,7 +415,7 @@ class Group
 			if length <= $track_min_snap_threshold
 				subtracks << coordinate
 				subtracks << end_coordinate
-				system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
+				#system("echo #{end_coordinate[0]} #{end_coordinate[1]} >> /tmp/plot/data")
 				return subtracks
 			else
 				subtracks << coordinate
@@ -462,7 +462,7 @@ class Group
 		track = [@waypoints[0][1]]
 
 		(@waypoints.size - 1).times do |way_start|
-			system("echo #{@waypoints[way_start][1][0]} #{@waypoints[way_start][1][1]} >> /tmp/plot/data")
+			#system("echo #{@waypoints[way_start][1][0]} #{@waypoints[way_start][1][1]} >> /tmp/plot/data")
 			tmp_track = propose_ideal_subtracks(@waypoints[way_start][1], @waypoints[way_start + 1][1], map)
 			tmp_track.each do |coor| track << coor end
 		end
@@ -516,6 +516,26 @@ class Group
 
 
 end # Group
+
+class Track
+
+  include Enumerable
+
+  attr_accessor :waypoints_coordinates
+
+  def initialize
+    @waypoints_coordinates = Array.new
+  end
+
+  def clean
+    @waypoints_coordinates = Array.new
+  end
+
+  def each
+    @waypoints_coordinates.each { |x| yield x }
+  end
+
+end
 
 class TerrainMap
 
@@ -966,14 +986,56 @@ class GrMoGe
 	end
 end
 
-class Numeric
-	def deg2rad
-		( self / 180.0 ) * Math::PI
-	end
+class Dir
+    # creates a temporary directory (0700)
+    def Dir.mktmpdir(prefix_suffix=nil, tmpdir=nil)
+        case prefix_suffix
+        when nil
+            prefix = "d"
+            suffix = ""
+        when String
+            prefix = prefix_suffix
+            suffix = ""
+        when Array
+            prefix = prefix_suffix[0]
+            suffix = prefix_suffix[1]
+        else
+            raise ArgumentError, "unexpected prefix_suffix: #{prefix_suffix.inspect}"
+        end
+        tmpdir ||= Dir.tmpdir
+        t = Time.now.strftime("%Y%m%d")
+        n = nil
+        begin
+            path = "#{tmpdir}/#{prefix}#{t}-#{$$}-#{rand(0x100000000).to_s(36)}"
+            path << "-#{n}" if n
+            path << suffix
+            Dir.mkdir(path, 0700)
+        rescue Errno::EEXIST
+            n ||= 0
+            n += 1
+            retry
+        end
 
-	def rad2deg
-		( self / Math::PI ) * 180
-	end
+        if block_given?
+            begin
+                yield path
+            ensure
+                FileUtils.remove_entry_secure path
+            end
+        else
+            path
+        end
+    end
+end
+
+class Numeric
+    def deg2rad
+        ( self / 180.0 ) * Math::PI
+    end
+
+    def rad2deg
+        ( self / Math::PI ) * 180
+    end
 end
 
 
